@@ -4,7 +4,7 @@ from cpu import *
 class Bus:
     def __init__(self):
         self.ram = [0 for i in range(64 * 1024)]
-        self.cpu = CPU_6502()
+        self.cpu = Cpu6502()
         self.cpu.connectBus(self)
 
     def BusWrite(self, addr: int, data: int):

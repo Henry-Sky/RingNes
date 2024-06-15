@@ -3,10 +3,10 @@ from enum import Enum
 
 
 class INSTRUCTION:
-    def __init__(self, func, addr, clk):
-        self.func = func
-        self.addr = addr
-        self.clk = clk
+    def __init__(self, operate, addrmode, cycles : int):
+        self.operate = operate
+        self.addrmode = addrmode
+        self.cycles = cycles
 
 
 class FLAGS(Enum):
@@ -20,7 +20,7 @@ class FLAGS(Enum):
     N = 1 << 7  # Negative
 
 
-class CPU_6502(object):
+class Cpu6502(object):
     """The 6502 CPU Emulation Class.
 
     The 6502 CPU Registers:
@@ -48,9 +48,9 @@ class CPU_6502(object):
         self.__opcode = int("0x00", 2)  # instruction byte
         self.__cycles = 0
         self.__clock = 0
-        # map
+        # Map
         self.__lookup = self.__InitLookup()
-        # device
+        # Device
         self.__bus = None
 
     def reset(self):
@@ -147,12 +147,6 @@ class CPU_6502(object):
     def connectBus(self, n: Bus):
         self.__bus = n
 
-    def __InitLookup(self):
-        map = {
-            "BRK": INSTRUCTION(self.__BRK(), self.__IMM(), 7),
-        }
-        return map
-
     def __read(self, a: int):
         """Read the data at an address without changing the state of the devices on bus"""
         return self.__bus.BusRead(a, False)
@@ -161,6 +155,11 @@ class CPU_6502(object):
         """Write a byte to the specified address"""
         return self.__bus.BusWrite(a, d)
 
+    def __fetch(self) -> int:
+        if not self.__lookup[self.__opcode].addrmode == self.__IMP:
+            self.__fetched = self.__read(self.__addr_abs)
+        return self.__fetched
+
     def __SetFlag(self, flag: FLAGS, v: bool):
         if v:
             self.status = self.status | flag.value
@@ -168,10 +167,188 @@ class CPU_6502(object):
             self.status = self.status & ~flag.value
 
     def __GetFlag(self, flag: FLAGS):
-        return 1 if self.status & flag.value > 0 else 0
+        return 1 if (self.status & flag.value) > 0 else 0
+
+    def __InitLookup(self):
+        instruction_map = {
+            "BRK": INSTRUCTION(self.__BRK, self.__IMM, 7),
+        }
+        return instruction_map
+
+    """Addressing Mode
+    
+    The 6502 has a variety of addressing modes to access data in memory,
+    some are direct and some are indirect etc.
+    
+    """
+
+    def __IMP(self) -> int:
+        self.__fetched = self.acc
+        return 0
 
     def __IMM(self):
-        pass
+        self.pc += 1
+        self.__addr_abs = self.pc
+        return 0
+
+    def __ZP0(self):
+        self.__addr_abs = self.__read(self.pc)
+        self.pc += 1
+        self.__addr_abs &= int("0x00ff", 2)
+        return 0
+
+    def __ZPX(self):
+        self.__addr_abs = (self.__read(self.pc) + self.x)
+        self.pc += 1
+        self.__addr_abs &= int("0x00ff", 2)
+        return 0
+
+    def __ZPY(self):
+        self.__addr_abs = (self.__read(self.pc) + self.y)
+        self.pc += 1
+        self.__addr_abs &= int("0x00ff", 2)
+        return 0
+
+    def __REL(self):
+        self.__addr_rel = self.__read(self.pc)
+        self.pc += 1
+        if (self.__addr_rel & int("0x80", 2)):
+            self.__addr_rel |= int("0xff00", 2)
+        return 0
+
+    def __ABS(self):
+        lo = self.__read(self.pc)
+        self.pc += 1
+        hi = self.__read(self.pc)
+        self.pc += 1
+
+        self.__addr_abs = (hi << 8) | lo
+        return 0
+
+    def __ABX(self):
+        lo = self.__read(self.pc)
+        self.pc += 1
+        hi = self.__read(self.pc)
+        self.pc += 1
+
+        self.__addr_abs = (hi << 8) | lo
+        self.__addr_abs += self.x
+
+        if (self.__addr_abs & int("0xff00", 2)) != (hi << 8):
+            return 1
+        else:
+            return 0
+
+    def __ABY(self):
+        lo = self.__read(self.pc)
+        self.pc += 1
+        hi = self.__read(self.pc)
+        self.pc += 1
+
+        self.__addr_abs = (hi << 8) | lo
+        self.__addr_abs += self.y
+
+        if (self.__addr_abs & int("0xff00", 2)) != (hi << 8):
+            return 1
+        else:
+            return 0
+
+    # The next 3 address modes use indirection (aka Pointers!)
+
+    def __IND(self):
+        ptr_lo = self.__read(self.pc)
+        self.pc += 1
+        ptr_hi = self.__read(self.pc)
+        self.pc += 1
+
+        ptr = (ptr_hi << 8) | ptr_lo
+
+        if ptr_lo == int("0xff", 2):
+            self.__addr_abs = (self.__read(ptr & int("0xff00", 2)) << 8) | self.__read(ptr + 0)
+        else:
+            self.__addr_abs = (self.__read(ptr + 1) << 8) | self.__read(ptr + 0)
+
+        return 0
+
+    def __IZX(self):
+        t = self.__read(self.pc)
+        self.pc += 1
+        lo = self.__read((t + self.x) & int("0x00ff", 2))
+        hi = self.__read((t + self.x + 1) & int("0x00ff", 2))
+        self.__addr_abs = (hi << 8) | lo
+
+        return 0
+
+    def __IZY(self):
+        t = self.__read(self.pc)
+        self.pc += 1
+        lo = self.__read(t & int("0x00ff", 2))
+        hi = self.__read((t + 1) & int("0x00ff", 2))
+        self.__addr_abs = (hi << 8) | lo
+        self.__addr_abs += self.y
+
+        if (self.__addr_abs & int("0xff00", 2)) != (hi << 8):
+            return 1
+        else:
+            return 0
+
+
+    """Opcodes
+    
+    There are 56 "legitimate" opcodes provided by the 6502 CPU.
+    
+    """
+
+    def __ADC(self):
+        self.__fetch()
+        self.__temp = self.acc + self.__fetched + self.__GetFlag(FLAGS.C)
+        self.__SetFlag(FLAGS.C, self.__temp > 255)
+        self.__SetFlag(FLAGS.Z, (self.__temp & int("0x00ff", 2)) == 0)
+        self.__SetFlag(FLAGS.V, ((~self.acc ^ self.__fetched) & (self.acc ^ self.__temp) & int("0x0080", 2)) > 0)
+        self.__SetFlag(FLAGS.N, (self.__temp & int("0x0080", 2)) > 0)
+        self.acc = self.__temp & int("0x00ff", 2)
+        return 1
+
+    def __SBC(self):
+        self.__fetch()
+        value = (self.__fetched) ^ int("0x00ff", 2)
+        self.__temp = self.acc + value + self.__GetFlag(FLAGS.C)
+        self.__SetFlag(FLAGS.C, self.__temp & int("0xff00", 2) > 0)
+        self.__SetFlag(FLAGS.Z, self.__temp & int("0x00ff", 2) == 0)
+        self.__SetFlag(FLAGS.V, (self.__temp ^ self.acc) & (self.__temp ^ value) & int("0x0080", 2) > 0)
+        self.__SetFlag(FLAGS.N, (self.__temp & int("0x0080", 2)) > 0)
+        self.acc = self.__temp & int("0x00ff", 2)
+        return 1
+
+    def __AND(self):
+        self.__fetch()
+        self.acc = self.acc & self.__fetched
+        self.__SetFlag(FLAGS.Z, self.acc == int("0x00", 2))
+        self.__SetFlag(FLAGS.N, self.acc & int("0x80", 2) > 0)
+        return 1
+
+
+    def __ASL(self):
+        self.__fetch()
+        self.__temp = self.__fetched << 1
+        self.__SetFlag(FLAGS.C, self.__temp & int("0xff00", 2) > 0)
+        self.__SetFlag(FLAGS.Z, self.__temp & int("0x00ff", 2) == 0)
+        self.__SetFlag(FLAGS.N, (self.__temp  & int("0x0080", 2)) > 0)
+        if self.__lookup[self.__opcode].addrmode == self.__IMP:
+            self.acc = self.__temp & int("0x00ff", 2)
+        else:
+            self.__write(self.__addr_abs, self.__temp & int("0x00ff", 2))
+        return 0
+
+    def __BCC(self):
+        if self.__GetFlag(FLAGS.C) == 0:
+            self.__cycles += 1
+            self.__addr_abs = self.pc + self.__addr_rel
+
+            if self.__addr_abs & int("0xff00", 2) != (self.pc & int("0xff00", 2)):
+                self.__cycles += 1
+            self.pc = self.__addr_abs
+        return 0
 
     def __BRK(self):
         pass
