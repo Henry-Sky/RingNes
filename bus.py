@@ -1,4 +1,4 @@
-from cpu import *
+from cpu import Cpu6502
 
 
 class Bus:
