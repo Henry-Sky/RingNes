@@ -649,3 +649,73 @@ class Cpu6502(object):
         self.pc |= self.__read(hex2int("0x0100") + self.stkp) << 8
         self.pc += 1
         return 0
+
+    def __SEC(self):
+        self.__SetFlag(FLAGS.C, True)
+        return 0
+
+    def __SED(self):
+        self.__SetFlag(FLAGS.D, True)
+        return 0
+
+    def __SEI(self):
+        self.__SetFlag(FLAGS.I, True)
+        return 0
+
+    def __STA(self):
+        self.__write(self.__addr_abs, self.acc)
+        return 0
+
+    def __STX(self):
+        self.__write(self.__addr_abs, self.x)
+        return 0
+
+    def __STY(self):
+        self.__write(self.__addr_abs, self.y)
+        return 0
+
+    def __TAX(self):
+        self.x = self.acc
+        self.__SetFlag(FLAGS.Z, self.x == hex2int("0x00"))
+        self.__SetFlag(FLAGS.N, self.x & hex2int("0x80") > 0)
+        return 0
+
+    def __TAY(self):
+        self.y = self.acc
+        self.__SetFlag(FLAGS.Z, self.y == hex2int("0x00"))
+        self.__SetFlag(FLAGS.N, self.y & hex2int("0x80") > 0)
+        return 0
+
+    def __TSX(self):
+        self.x = self.stkp
+        self.__SetFlag(FLAGS.Z, self.x == hex2int("0x00"))
+        self.__SetFlag(FLAGS.N, self.x & hex2int("0x80") > 0)
+        return 0
+
+    def __TXA(self):
+        self.acc = self.x
+        self.__SetFlag(FLAGS.Z, self.acc == hex2int("0x00"))
+        self.__SetFlag(FLAGS.N, self.acc & hex2int("0x80") > 0)
+        return 0
+
+    def __TXS(self):
+        self.stkp = self.x
+        return 0
+
+    def __TYA(self):
+        self.acc = self.y
+        self.__SetFlag(FLAGS.Z, self.acc == hex2int("0x00"))
+        self.__SetFlag(FLAGS.N, self.acc & hex2int("0x80") > 0)
+        return 0
+
+    def __XXX(self):
+        return 0
+
+    """disassembly function
+    
+    This function turns the binary insruction code into human readable form.
+    
+    """
+    def __disassemble(self, nstart:int, nstop:int):
+        pass
+
