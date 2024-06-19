@@ -1,4 +1,5 @@
 from mapper import Mapper
+from utils import MIRROR, hex2int
 
 
 class Cartridge(object):
@@ -11,19 +12,22 @@ class Cartridge(object):
 
         self.vPRGMemory = []
         self.vCHRMemory = []
+        self.mirror = None
         self.pMapper = None
 
         with open(path, 'rb') as f:
             name = str(f.read(4), encoding='utf-8')
-            prg_rom_chunks = int.from_bytes(f.read(1))
-            chr_rom_chunks = int.from_bytes(f.read(1))
-            mapper1 = int.from_bytes(f.read(1))
-            mapper2 = int.from_bytes(f.read(1))
-            prg_ram_size = int.from_bytes(f.read(1))
-            tv_system1 = int.from_bytes(f.read(1))
-            tv_system2 = int.from_bytes(f.read(1))
-            unused = int.from_bytes(f.read(5))
-
+            prg_rom_chunks = int.from_bytes(f.read(1), byteorder='little')
+            chr_rom_chunks = int.from_bytes(f.read(1), byteorder='little')
+            mapper1 = int.from_bytes(f.read(1), byteorder='little')
+            mapper2 = int.from_bytes(f.read(1), byteorder='little')
+            prg_ram_size = int.from_bytes(f.read(1), byteorder='little')
+            tv_system1 = int.from_bytes(f.read(1), byteorder='little')
+            tv_system2 = int.from_bytes(f.read(1), byteorder='little')
+            unused = int.from_bytes(f.read(5), byteorder='little')
+            # If "trainer" exists, just read past it
+            if mapper1 & hex2int("0x04") > 0:
+                f.read(512)
             # File Type
             nFileType = 1
             # According to file type, set nPRG and nCHR
@@ -35,9 +39,15 @@ class Cartridge(object):
 
                 self.nCHRBanks = chr_rom_chunks
                 self.vCHRMemory = list(f.read(self.nCHRBanks * 8192))
-            # mapper function
+            # mirror type
+            self.mirror = MIRROR.VERTICAL if mapper1 & hex2int("0x01") > 0 else MIRROR.HORIZONTAL
+            # mapper selection
+            self.nMapperID = ((mapper2 >> 4) << 4) | (mapper1 >> 4)
             if self.nMapperID == 0:
-                self.pMapper = Mapper(self.nPRGBanks, self.nCHRBanks)
+                pass
+            elif self.nMapperID == 1:
+                pass
+            self.pMapper = Mapper(self.nPRGBanks, self.nCHRBanks)
 
         self.bImageValid = True
 
