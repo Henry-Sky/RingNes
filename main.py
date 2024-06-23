@@ -1,5 +1,6 @@
 from bus import Bus
-from screen import Screen, ColorMap
+from screen import Screen
+from utils import ColorMap
 from cartridge import Cartridge
 
 
@@ -12,9 +13,9 @@ class RingNES(object):
         self.bEmulationRun = False
         self.fResidualTime = 0.0
 
-    def Construct(self, screen_w: int, screen_h: int):
-        self.screen = Screen(screen_w, screen_h)
-        self.screen.connectPPU(self.nes.ppu)
+    def Start(self):
+        if self.onUserCreate():
+            pass
 
     def onUserCreate(self) -> bool:
         if not self.cart.bImageValid:
@@ -42,7 +43,6 @@ class RingNES(object):
 
 def main():
     nes = RingNES()
-    nes.onUserCreate()
 
 
 if __name__ == '__main__':

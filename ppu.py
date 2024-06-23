@@ -1,9 +1,12 @@
-import random
+"""
+Author: Henry-Sky <https://github.com/Henry-Sky>
+Date: 2024-06-18
+"""
 
+import random
 from cartridge import Cartridge
-from screen import Pixel
 from sprite import Sprite
-from utils import hex2int, MIRROR
+from utils import MIRROR, Pixel, PalInit
 
 
 class Ppu2c02:
@@ -14,8 +17,8 @@ class Ppu2c02:
         self.nmi = False
         self.frame_complete = False
         # Internal communications
-        self.ppu_data_buffer = hex2int("0x00")
-        self.address_latch = hex2int("0x00")
+        self.ppu_data_buffer = 0x00
+        self.address_latch = 0x00
         self.fine_x = 0
         """loopy register: vram_addr and tram_addr
         5 bit : coarse_x
@@ -25,8 +28,8 @@ class Ppu2c02:
         3 bit : fine_y
         1 bit : unused
         """
-        self.vram_addr = 0  # active "pointer" address into nametable to extract background tile info
-        self.tram_addr = 0  # temporary store of information to be "transferred" into "pointer" at various times
+        self.vram_addr = 0x0000  # active "pointer" address into nametable to extract background tile info
+        self.tram_addr = 0x0000  # temporary store of information to be "transferred" into "pointer" at various times
         # 8 Registers for cpu[$2000~$2007]
         """control
             1 bit : nametable_x
@@ -38,7 +41,7 @@ class Ppu2c02:
             1 bit : slave_mode
             1 bit : enable_nmi
         """
-        self.__control = 0
+        self.__control = 0b00000000
         """mask
             1 bit : grayscale
             1 bit : render_background_left
@@ -49,16 +52,16 @@ class Ppu2c02:
             1 bit : enhance_green
             1 bit : enhance_blue
         """
-        self.__mask = 0
+        self.__mask = 0b00000000
         """status
             5 bit : unused
             1 bit : sprite_overflow
             1 bit : sprite_zero_hit
             1 bit : vertical_blank
         """
-        self.__status = 0
+        self.__status = 0b00000000
         # API
-        self.palScreen = self.palInit()
+        self.palScreen = PalInit()
         self.sprScreen = Sprite(256, 240)
         self.sprNameTable = [Sprite(256, 240), Sprite(256, 240)]
         self.sprPatternTable = [Sprite(128, 128), Sprite(128, 128)]
@@ -67,89 +70,17 @@ class Ppu2c02:
         self.__tblName = [[0 for x in range(1024)], [0 for x in range(1024)]]
         # 8KB = 2 * 4KB[PatternTable]
         self.__tblPattern = [[0 for i in range(4096)], [0 for i in range(4096)]]
-        # 背景调色板 ?
+        # Colour Rom
         self.__tblPalette = [0 for i in range(32)]
 
-        self.bg_next_tile_id = hex2int("0x00")
-        self.bg_next_tile_attrib = hex2int("0x00")
-        self.bg_next_tile_lsb = hex2int("0x00")
-        self.bg_next_tile_msb = hex2int("0x00")
-        self.bg_shifter_pattern_lo = hex2int("0x0000")
-        self.bg_shifter_pattern_hi = hex2int("0x0000")
-        self.bg_shifter_attrib_lo = hex2int("0x0000")
-        self.bg_shifter_attrib_hi = hex2int("0x0000")
-
-    def palInit(self) -> list:
-        pals = [
-            Pixel(84, 84, 84),
-            Pixel(0, 30, 116),
-            Pixel(8, 16, 144),
-            Pixel(48, 0, 136),
-            Pixel(68, 0, 100),
-            Pixel(92, 0, 48),
-            Pixel(84, 4, 0),
-            Pixel(60, 24, 0),
-            Pixel(32, 42, 0),
-            Pixel(8, 58, 0),
-            Pixel(0, 64, 0),
-            Pixel(0, 60, 0),
-            Pixel(0, 50, 60),
-            Pixel(0, 0, 0),
-            Pixel(0, 0, 0),
-            Pixel(0, 0, 0),
-
-            Pixel(152, 150, 152),
-            Pixel(8, 76, 196),
-            Pixel(48, 50, 236),
-            Pixel(92, 30, 228),
-            Pixel(136, 20, 176),
-            Pixel(160, 20, 100),
-            Pixel(152, 34, 32),
-            Pixel(120, 60, 0),
-            Pixel(84, 90, 0),
-            Pixel(40, 114, 0),
-            Pixel(8, 124, 0),
-            Pixel(0, 118, 40),
-            Pixel(0, 102, 120),
-            Pixel(0, 0, 0),
-            Pixel(0, 0, 0),
-            Pixel(0, 0, 0),
-
-            Pixel(236, 238, 236),
-            Pixel(76, 154, 236),
-            Pixel(120, 124, 236),
-            Pixel(176, 98, 236),
-            Pixel(228, 84, 236),
-            Pixel(236, 88, 180),
-            Pixel(236, 106, 100),
-            Pixel(212, 136, 32),
-            Pixel(160, 170, 0),
-            Pixel(116, 196, 0),
-            Pixel(76, 208, 32),
-            Pixel(56, 204, 108),
-            Pixel(56, 180, 204),
-            Pixel(60, 60, 60),
-            Pixel(0, 0, 0),
-            Pixel(0, 0, 0),
-
-            Pixel(236, 238, 236),
-            Pixel(168, 204, 236),
-            Pixel(188, 188, 236),
-            Pixel(212, 178, 236),
-            Pixel(236, 174, 236),
-            Pixel(236, 174, 212),
-            Pixel(236, 180, 176),
-            Pixel(228, 196, 144),
-            Pixel(204, 210, 120),
-            Pixel(180, 222, 120),
-            Pixel(168, 226, 144),
-            Pixel(152, 226, 180),
-            Pixel(160, 214, 228),
-            Pixel(160, 162, 160),
-            Pixel(0, 0, 0),
-            Pixel(0, 0, 0),
-        ]
-        return pals
+        self.bg_next_tile_id = 0x00
+        self.bg_next_tile_attrib = 0x00
+        self.bg_next_tile_lsb = 0x00
+        self.bg_next_tile_msb = 0x00
+        self.bg_shifter_pattern_lo = 0x0000
+        self.bg_shifter_pattern_hi = 0x0000
+        self.bg_shifter_attrib_lo = 0x0000
+        self.bg_shifter_attrib_hi = 0x0000
 
     def GetScreen(self):
         return self.sprScreen
@@ -157,63 +88,113 @@ class Ppu2c02:
     def GetNameTable(self, i: int):
         return self.sprNameTable[i]
 
-    def GetPatternTable(self, i: int):
+    def GetPatternTable(self, i: int, palette: int):
+        """
+
+        This function draw the CHR ROM for a given pattern table into a Sprite.
+        Pattern tables consist os 16 x 16 "tiles or characters"
+
+        A tile consist of 8 x 8 pixels
+        On NES pixel are 2 bits witch gives 4 different colours of specific palette
+        There are 8 palettes to choose from
+
+        Characters on NES
+        ~~~~~~~~~~~~~~~~~
+        The NES stores characters using 2-bit pixels. These are not stored sequentially
+        but in singular bit planes. For example:
+
+        2-Bit Pixels       LSB Bit Plane     MSB Bit Plane
+        0 0 0 0 0 0 0 0	  0 0 0 0 0 0 0 0   0 0 0 0 0 0 0 0
+        0 1 1 0 0 1 1 0	  0 1 1 0 0 1 1 0   0 0 0 0 0 0 0 0
+        0 1 2 0 0 2 1 0	  0 1 1 0 0 1 1 0   0 0 1 0 0 1 0 0
+        0 0 0 0 0 0 0 0 = 0 0 0 0 0 0 0 0 + 0 0 0 0 0 0 0 0
+        0 1 1 0 0 1 1 0	  0 1 1 0 0 1 1 0   0 0 0 0 0 0 0 0
+        0 0 1 1 1 1 0 0	  0 0 1 1 1 1 0 0   0 0 0 0 0 0 0 0
+        0 0 0 2 2 0 0 0	  0 0 0 1 1 0 0 0   0 0 0 1 1 0 0 0
+        0 0 0 0 0 0 0 0	  0 0 0 0 0 0 0 0   0 0 0 0 0 0 0 0
+
+        The planes are stored as 8 bytes of LSB, followed by 8 bytes of MSB
+
+        """
+        for y in range(16):
+            for x in range(16):
+                nOffset = y * 256 + x * 16
+                for row in range(8):
+                    tile_lsb = self.ppuRead(i * 0x1000 + nOffset + row + 0x0000)
+                    tile_msb = self.ppuRead(i * 0x1000 + nOffset + row + 0x0008)
+                    for col in range(8):
+                        pixel = (tile_lsb & 0x01) + (tile_msb & 0x01)
+                        tile_lsb >>= 1
+                        tile_msb >>= 1
+                        self.sprPatternTable[i].SetPixel(
+                            x=(x * 8) + (7 - col),
+                            y=(y * 8) + row,
+                            p=self.GetColourFromPaletteRam(palette, pixel)
+                        )
+        # Finally return the updated sprite representing the pattern table
         return self.sprPatternTable[i]
+
+    def GetColourFromPaletteRam(self, palette: int, pixel: int) -> Pixel:
+        """
+        Taking a specified palette and pixel index
+        Return the appropriate screen colour
+        """
+        return self.palScreen[self.ppuRead(0x3F00 + (palette << 2) + pixel) & 0x3F]
 
     def connectCart(self, cart: Cartridge):
         self.__cart = cart
 
     def reset(self):
-        self.fine_x = hex2int("0x00")
-        self.address_latch = hex2int("0x00")
-        self.ppu_data_buffer = hex2int("0x00")
+        self.fine_x = 0x00
+        self.address_latch = 0x00
+        self.ppu_data_buffer = 0x00
         self.__scanline = 0
         self.__cycle = 0
-        self.bg_next_tile_id = hex2int("0x00")
-        self.bg_next_tile_attrib = hex2int("0x00")
-        self.bg_next_tile_lsb = hex2int("0x00")
-        self.bg_next_tile_msb = hex2int("0x00")
-        self.bg_shifter_pattern_lo = hex2int("0x0000")
-        self.bg_shifter_pattern_hi = hex2int("0x0000")
-        self.bg_shifter_attrib_lo = hex2int("0x0000")
-        self.bg_shifter_attrib_hi = hex2int("0x0000")
-        self.__status = hex2int("0x00")
-        self.vram_addr = hex2int("0x0000")
-        self.tram_addr = hex2int("0x0000")
+        self.bg_next_tile_id = 0x00
+        self.bg_next_tile_attrib = 0x00
+        self.bg_next_tile_lsb = 0x00
+        self.bg_next_tile_msb = 0x00
+        self.bg_shifter_pattern_lo = 0x0000
+        self.bg_shifter_pattern_hi = 0x0000
+        self.bg_shifter_attrib_lo = 0x0000
+        self.bg_shifter_attrib_hi = 0x0000
+        self.__status = 0x00
+        self.vram_addr = 0x0000
+        self.tram_addr = 0x0000
 
     def cpuWrite(self, addr: int, data: int):
-        if addr == hex2int("0x0000"):  # Control
+        if addr == 0x0000:  # Control
             self.__control = data
-            self.tram_addr = (self.tram_addr & hex2int("0xc0")) | (self.__control & hex2int("0x3f"))
-        elif addr == hex2int("0x0001"):  # Mask
+            self.tram_addr = (self.tram_addr & 0xC0) | (self.__control & 0x3F)
+        elif addr == 0x0001:  # Mask
             self.__mask = data
-        elif addr == hex2int("0x0002"):  # Status
+        elif addr == 0x0002:  # Status
             pass
-        elif addr == hex2int("0x0003"):  # OAM Address
+        elif addr == 0x0003:  # OAM Address
             pass
-        elif addr == hex2int("0x0004"):  # OAM Data
+        elif addr == 0x0004:  # OAM Data
             pass
-        elif addr == hex2int("0x0005"):  # Scroll
+        elif addr == 0x0005:  # Scroll
             if self.address_latch == 0:
-                self.fine_x = data & hex2int("0x07")
+                self.fine_x = data & 0x0007
                 # tram_addr->coarse_x = data >> 3
-                self.tram_addr = (self.tram_addr & hex2int("0x07ff")) | ((data >> 3) << 11)
+                self.tram_addr = (self.tram_addr & 0x07FF) | ((data >> 3) << 11)
                 self.address_latch = 1
             else:
                 # tram_addr->fine_y = data & 0x07
-                self.tram_addr = (self.tram_addr & hex2int("0xfff1")) | (data & hex2int("0x07") << 1)
+                self.tram_addr = (self.tram_addr & 0xFFF1) | (data & 0x07 << 1)
                 # tram_addr->coarse_y = data >> 3
-                self.tram_addr = (self.tram_addr & hex2int("0xf83f")) | ((data >> 3) << 6)
+                self.tram_addr = (self.tram_addr & 0xF83F) | ((data >> 3) << 6)
                 self.address_latch = 0
-        elif addr == hex2int("0x0006"):
+        elif addr == 0x0006:
             if self.address_latch == 0:
-                self.tram_addr = ((data & hex2int("0x3f")) << 8) | (self.tram_addr & hex2int("0x00ff"))
+                self.tram_addr = ((data & 0x3F) << 8) | (self.tram_addr & 0x00FF)
                 self.address_latch = 1
             else:
-                self.tram_addr = (self.tram_addr & hex2int("0xff00")) | data
+                self.tram_addr = (self.tram_addr & 0xFF00) | data
                 self.vram_addr = self.tram_addr
                 self.address_latch = 0
-        elif addr == hex2int("0x0007"):
+        elif addr == 0x0007:
             self.ppuWrite(self.vram_addr, data)
             self.vram_addr += 32 if self.__control >= (1 << 5) else 1
         else:
@@ -225,7 +206,7 @@ class Ppu2c02:
         :param readonly: If true do read without changing, only in debug mode
         :return: The data of ppu data buffer
         """
-        data = hex2int("0x00")
+        data = 0x00
         if readonly:
             """
             Reading behavior could affect the ppu contents，
@@ -233,21 +214,21 @@ class Ppu2c02:
             The option is used for reading without changing its status
             This is really only used for debug mode !
             """
-            if addr == hex2int("0x0000"):
+            if addr == 0x0000:
                 data = self.__control
-            elif addr == hex2int("0x0001"):
+            elif addr == 0x0001:
                 data = self.__mask
-            elif addr == hex2int("0x0002"):
+            elif addr == 0x0002:
                 data = self.__status
-            elif addr == hex2int("0x0003"):
+            elif addr == 0x0003:
                 pass
-            elif addr == hex2int("0x0004"):
+            elif addr == 0x0004:
                 pass
-            elif addr == hex2int("0x0005"):
+            elif addr == 0x0005:
                 pass
-            elif addr == hex2int("0x0006"):
+            elif addr == 0x0006:
                 pass
-            elif addr == hex2int("0x0007"):
+            elif addr == 0x0007:
                 pass
             else:
                 pass
@@ -256,7 +237,7 @@ class Ppu2c02:
             Note that not all registers are capable of being reading
             So they just return 0x00
             """
-            if addr == hex2int("0x0000"):
+            if addr == 0x0000:
                 pass
             elif addr == hex2int("0x0001"):
                 pass
@@ -357,8 +338,8 @@ class Ppu2c02:
                     self.__tblName[1][addr & hex2int("0x03ff")] = data
         elif hex2int("0x3f00") <= addr <= hex2int("0x3fff"):
             addr &= hex2int("0x001f")
-            if addr == hex2int("0x0010"):
-                addr = hex2int("0x0000")
+            if addr == 0x0010:
+                addr = 0x0000
             elif addr == hex2int("0x0014"):
                 addr = hex2int("0x0004")
             elif addr == hex2int("0x0018"):
@@ -368,7 +349,7 @@ class Ppu2c02:
             self.__tblPalette[addr] = data
 
     def clock(self):
-        noise = hex2int("0x3f") if random.random() > 0.5 else hex2int("0x30")
+        noise = 0x3F if random.random() > 0.5 else 0x30
         self.sprScreen.SetPixel(self.__cycle - 1, self.__scanline, self.palScreen[noise])
 
         self.__cycle += 1

@@ -1,13 +1,13 @@
-from screen import Pixel
-from utils import hex2int
+from utils import Pixel
+
 
 class Sprite(object):
     def __init__(self, w: int, h: int):
         self.width = w
         self.height = h
 
-        self.nDefaultAlpha = hex2int("0xff")
-        self.nDefaultPixel = (hex2int("0xff") << 24)
+        self.nDefaultAlpha = 0xFF
+        self.nDefaultPixel = (0xFF << 24)
         self.pColData = [self.nDefaultPixel for i in range(self.width * self.height)]
 
     def SetPixel(self, x: int, y: int, p: Pixel) -> bool:
