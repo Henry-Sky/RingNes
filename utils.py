@@ -9,6 +9,14 @@ class INSTRUCTION:
         self.cycles = cycles
 
 
+class TILE:
+    def __init__(self, y: int, id: int, attr: int, x: int):
+        self.y = y
+        self.id = id
+        self.attribute = attr
+        self.x = x
+
+
 class FLAGS(Enum):
     N = 1 << 7  # Negative Flag (1 when result is negative)
     V = 1 << 6  # Overflow Flag (1 on signed overflow)
@@ -21,6 +29,7 @@ class FLAGS(Enum):
 
 
 class MIRROR(Enum):
+    HARDWARE = "hardware"
     HORIZONTAL = "horizontal"
     VERTICAL = "vertical"
     ONESCREEN_LO = "onescreen_lo"

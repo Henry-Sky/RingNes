@@ -22,7 +22,7 @@ class Cartridge(object):
 
         self.vPRGMemory = []
         self.vCHRMemory = []
-        self.mirror = None
+        self.hw_mirror = MIRROR.HORIZONTAL
         self.pMapper = None
 
         with open(path, 'rb') as f:
@@ -61,7 +61,7 @@ class Cartridge(object):
                 pass
 
             # mirror type
-            self.mirror = MIRROR.VERTICAL if mapper1 & 0x01 > 0 else MIRROR.HORIZONTAL
+            self.hw_mirror = MIRROR.VERTICAL if mapper1 & 0x01 > 0 else MIRROR.HORIZONTAL
             # mapper selection
             self.nMapperID = ((mapper2 >> 4) << 4) | (mapper1 >> 4)
             if self.nMapperID == 0:
@@ -76,6 +76,10 @@ class Cartridge(object):
                 self.pMapper = Mapper_004(self.nPRGBanks, self.nCHRBanks)
             else:
                 self.pMapper = Mapper(self.nPRGBanks, self.nCHRBanks)
+            print(
+                "SUMINFO:\nFileType: {}, MapperID: {},\n".format(nFileType, self.nMapperID) +
+                "PRG Banks: {}, CHR Banks: {},\nMirrorType: {}".format(self.nPRGBanks, self.nCHRBanks, self.hw_mirror)
+            )
         self.bImageValid = True
 
     def ImageValid(self) -> bool:
@@ -84,31 +88,51 @@ class Cartridge(object):
     def cpuWrite(self, addr: int, data: int) -> bool:
         flag, mapped_addr = self.pMapper.cpuMapWrite(addr, data)
         if flag:
-            self.vPRGMemory[mapped_addr] = data
-            return True
+            if mapped_addr == 0xFFFFFFFF:
+                return True
+            else:
+                self.vPRGMemory[mapped_addr] = data
+                return True
         else:
             return False
 
     def cpuRead(self, addr: int, readonly: bool) -> (bool, int):
         flag, mapped_addr, data = self.pMapper.cpuMapRead(addr)
         if flag:
-            data = self.vPRGMemory[mapped_addr]
-            return True, data
+            if mapped_addr == 0xFFFFFFFF:
+                return True, data
+            else:
+                data = self.vPRGMemory[mapped_addr]
+                return True, data
         else:
             return False, 0x00
 
     def ppuWrite(self, addr: int, data: int) -> bool:
-        mapped_addr = 0x0000
-        if self.pMapper.ppuMapWrite(addr, mapped_addr):
+        flag, mapped_addr = self.pMapper.cpuMapWrite(addr, data)
+        if flag:
             self.vCHRMemory[mapped_addr] = data
             return True
         else:
             return False
 
-    def ppuRead(self, addr: int, data: int) -> bool:
-        mapped_addr = 0
-        if self.pMapper.ppuMapRead(addr, mapped_addr):
+    def ppuRead(self, addr: int) -> (bool, int):
+        flag, mapped_addr = self.pMapper.ppuMapRead(addr)
+        if flag:
             data = self.vCHRMemory[mapped_addr]
-            return True
+            return True, data
         else:
-            return False
+            return False, 0x0
+
+    def GetMapper(self):
+        return self.pMapper
+
+    def reset(self):
+        if self.pMapper is not None:
+            self.pMapper.reset()
+
+    def Mirror(self):
+        m = self.pMapper.mirror()
+        if m == MIRROR.HARDWARE:
+            return self.hw_mirror
+        else:
+            return m

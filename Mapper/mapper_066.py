@@ -3,7 +3,7 @@ Author: Henry-Sky <https://github.com/Henry-Sky>
 Date: 2024-06-18
 """
 
-from mapper import Mapper
+from Mapper.mapper import Mapper
 
 
 class Mapper_066(Mapper):

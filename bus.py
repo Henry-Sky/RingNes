@@ -62,8 +62,17 @@ class Bus:
         self.__cart = None
         self.__bCartInserted = False
 
+        self.dma_page = 0x00
+        self.dma_addr = 0x00
+        self.dma_data = 0x00
+
+        self.dma_dummy = True
+        self.dma_transfer = False
+
     def cpuWrite(self, addr: int, data: int):
-        if 0 < addr < 0x1fff:
+        if self.__cart.cpuWrite(addr, data):
+            pass
+        elif 0 < addr < 0x1fff:
             # 8KB [$0000~$1FFF]: 2KB Ram and 3 * 2KB Mirror Ram
             self.cpuRam[addr & 0x07ff] = data
         elif 0x2000 <= addr <= 0x3fff:
@@ -80,8 +89,6 @@ class Bus:
         elif 0x2000 <= addr <= 0x3fff:
             # 8KB [$2000~$3FFF]: 1024 Mirror * 8B PPU Resister
             data = self.ppu.cpuRead(addr & 0x0007, readonly)
-        else:
-            data = 0x00
         return data
 
     def insertCartridge(self, cart: Cartridge):
@@ -90,11 +97,41 @@ class Bus:
         self.__bCartInserted = True
 
     def reset(self):
+        self.__cart.reset()
         self.cpu.reset()
+        self.ppu.reset()
         self.__nSystemClockCounter = 0
+        self.dma_page = 0x00
+        self.dma_addr = 0x00
+        self.dma_data = 0x00
+        self.dma_dummy = True
+        self.dma_transfer = False
 
     def clock(self):
         self.ppu.clock()
         if self.__nSystemClockCounter % 3 == 0:
-            self.cpu.clock()
+            if self.dma_transfer:
+                if self.dma_dummy:
+                    if self.__nSystemClockCounter % 2 == 1:
+                        self.dma_dummy = False
+                else:
+                    if self.__nSystemClockCounter % 2 == 0:
+                        self.dma_data = self.cpuRead(self.dma_page << 8 | self.dma_addr, False)
+                    else:
+                        self.ppu.OAM[self.dma_addr] = self.dma_data
+                        self.dma_addr += 1
+                        if self.dma_addr == 0x00:
+                            self.dma_transfer = False
+                            self.dma_dummy = True
+            else:
+                self.cpu.clock()
+
+        if self.ppu.nmi:
+            self.ppu.nmi = False
+            self.cpu.nmi()
+
+        if self.__cart.GetMapper().irqState():
+            self.__cart.GetMapper().irqClear()
+            self.cpu.irq()
+
         self.__nSystemClockCounter += 1
