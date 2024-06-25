@@ -192,7 +192,7 @@ class Ppu2c02:
         self.fine_x = 0x00
         self.address_latch = 0x00
         self.ppu_data_buffer = 0x00
-        self.__scanline = -1
+        self.__scanline = 0
         self.__cycle = 0
         self.bg_next_tile_id = 0x00
         self.bg_next_tile_attrib = 0x00
@@ -425,26 +425,26 @@ class Ppu2c02:
         def IncrementScrollX():
             # Only if rendering is enabled
             if (self.__mask & (1 << 3)) or (self.__mask & (1 << 4)):
-                if self.vram_addr & 0x001F == 31:
-                    self.vram_addr &= 0xFFE0
+                if self.vram_addr & 0x0000001F == 31:
+                    self.vram_addr &= 0x0000FFE0
                     self.vram_addr ^= (1 << 10)
                 else:
                     self.vram_addr += 1
 
         def IncrementScrollY():
             if (self.__mask & (1 << 3)) or (self.__mask & (1 << 4)):
-                if (self.vram_addr & 0x7000) >> 12 < 7:
+                if (self.vram_addr & 0x00007000) >> 12 < 7:
                     self.vram_addr += 0x1000
                 else:
-                    self.vram_addr &= 0x8FFF
-                    if self.vram_addr & 0x03E0 >> 5 == 29:
+                    self.vram_addr &= 0x00008FFF
+                    if self.vram_addr & 0x000003E0 >> 5 == 29:
                         # Set the coarse_y = 0
-                        self.vram_addr &= 0xFC1F
+                        self.vram_addr &= 0x0000FC1F
                         # Set the ~nametable_y
                         self.vram_addr ^= (1 << 11)
-                    elif self.vram_addr & 0x03E0 >> 5 == 31:
+                    elif self.vram_addr & 0x000003E0 >> 5 == 31:
                         # Set the coarse_y = 0
-                        self.vram_addr &= 0xFC1F
+                        self.vram_addr &= 0x0000FC1F
                     else:
                         # Set the coarse_y ++
                         self.vram_addr += (1 << 5)
@@ -453,28 +453,28 @@ class Ppu2c02:
             if (self.__mask & (1 << 3)) or (self.__mask & (1 << 4)):
                 # set vram_name_tablex = tram_name_table.
                 self.vram_addr &= ~0x0400
-                self.vram_addr ^= (self.tram_addr & 0x0400)
+                self.vram_addr ^= (self.tram_addr & 0x00000400)
                 # coarse_x
                 self.vram_addr &= ~0x001F
-                self.vram_addr ^= (self.tram_addr & 0x001F)
+                self.vram_addr ^= (self.tram_addr & 0x0000001F)
 
         def TransferAddressY():
             if (self.__mask & (1 << 3)) or (self.__mask & (1 << 4)):
                 self.vram_addr &= ~0x7000
-                self.vram_addr ^= (self.tram_addr & 0x7000)
+                self.vram_addr ^= (self.tram_addr & 0x00007000)
                 self.vram_addr &= ~0x0800
-                self.vram_addr ^= (self.tram_addr & 0x0800)
+                self.vram_addr ^= (self.tram_addr & 0x00000800)
                 self.vram_addr &= ~0x03E0
-                self.vram_addr ^= (self.tram_addr & 0x03E0)
+                self.vram_addr ^= (self.tram_addr & 0x000003E0)
 
         def LoadBackgroundShifters():
-            self.bg_shifter_pattern_lo = (self.bg_shifter_pattern_lo & 0xFF00) | self.bg_next_tile_lsb
-            self.bg_shifter_pattern_hi = (self.bg_shifter_pattern_hi & 0xFF00) | self.bg_next_tile_msb
+            self.bg_shifter_pattern_lo = (self.bg_shifter_pattern_lo & 0x0000FF00) | self.bg_next_tile_lsb
+            self.bg_shifter_pattern_hi = (self.bg_shifter_pattern_hi & 0x0000FF00) | self.bg_next_tile_msb
 
-            self.bg_shifter_attrib_lo = (self.bg_shifter_attrib_lo & 0xFF00) | (
-                0xFF if (self.bg_next_tile_attrib & 0b01) else 0x00)
-            self.bg_shifter_attrib_hi = (self.bg_shifter_attrib_hi & 0xFF00) | (
-                0xFF if (self.bg_next_tile_attrib & 0b10) else 0x00)
+            self.bg_shifter_attrib_lo = (self.bg_shifter_attrib_lo & 0x0000FF00) | (
+                0xFF if (self.bg_next_tile_attrib & 0x00000001) else 0x00)
+            self.bg_shifter_attrib_hi = (self.bg_shifter_attrib_hi & 0x0000FF00) | (
+                0xFF if (self.bg_next_tile_attrib & 0x00000002) else 0x00)
 
         def UpdateShifters():
             if self.__mask & 0x08:
@@ -503,9 +503,9 @@ class Ppu2c02:
 
             if self.__cycle == 1 and self.__scanline == -1:
                 # Effectively start of new frame, so clear vertical blank flag
-                self.__status &= 0x80  # Clear vertical_blank
-                self.__status &= 0x20  # Clear sprite_overflow
-                self.__status &= 0x40  # Clear sprite_zero_hit
+                self.__status &= 0x00000080  # Clear vertical_blank
+                self.__status &= 0x00000020  # Clear sprite_overflow
+                self.__status &= 0x00000040  # Clear sprite_zero_hit
                 for i in range(8):
                     self.sprite_shifter_pattern_lo[i] = 0
                     self.sprite_shifter_pattern_hi[i] = 0
@@ -523,29 +523,29 @@ class Ppu2c02:
                 if flag == 0:
                     LoadBackgroundShifters()
                     # Fetch the next background tile ID
-                    self.bg_next_tile_id = self.ppuRead(0x2000 | (self.vram_addr & 0x0FFF))
+                    self.bg_next_tile_id = self.ppuRead(0x2000 | (self.vram_addr & 0x00000FFF))
                     pass
 
                 elif flag == 2:
-                    self.bg_next_tile_attrib = self.ppuRead(0x23C0 | (self.vram_addr & 0x0800)
-                                                            | (self.vram_addr & 0x0400)
-                                                            | ((self.vram_addr & 0x03E0 >> 7) << 3)
-                                                            | (self.vram_addr & 0x001F >> 2))
-                    if (self.vram_addr & 0x03E0 >> 5) & 0x02:
+                    self.bg_next_tile_attrib = self.ppuRead(0x23C0 | (self.vram_addr & 0x00000800)
+                                                            | (self.vram_addr & 0x00000400)
+                                                            | ((self.vram_addr & 0x000003E0 >> 7) << 3)
+                                                            | (self.vram_addr & 0x0000001F >> 2))
+                    if (self.vram_addr & 0x000003E0 >> 5) & 0x02:
                         self.bg_next_tile_attrib >>= 4
-                    if (self.vram_addr & 0x001F) & 0x02:
+                    if (self.vram_addr & 0x0000001F) & 0x02:
                         self.bg_next_tile_attrib >>= 2
-                    self.bg_next_tile_attrib &= 0x03
+                    self.bg_next_tile_attrib &= 0x00000003
                     pass
 
                 elif flag == 4:
-                    addr = (self.__control & 0b00010000 << 8) + (self.bg_next_tile_id << 4) + (
-                                self.vram_addr & 0x7000 >> 12 + 0)
+                    addr = (self.__control & 0x00000010 << 8) + (self.bg_next_tile_id << 4) + (
+                                self.vram_addr & 0x00007000 >> 12 + 0)
                     self.bg_next_tile_lsb = self.ppuRead(addr)
                     pass
 
                 elif flag == 6:
-                    addr = (self.__control & 0b00010000 << 8) + (self.bg_next_tile_id << 4) + (
+                    addr = (self.__control & 0x00000010 << 8) + (self.bg_next_tile_id << 4) + (
                                 self.vram_addr & 0x7000 >> 12 + 8)
                     self.bg_next_tile_msb = self.ppuRead(addr)
                     pass
@@ -565,7 +565,7 @@ class Ppu2c02:
 
             if self.__cycle == 338 or self.__cycle == 340:
                 #
-                self.bg_next_tile_id = self.ppuRead(0x2000 | (self.vram_addr & 0x0FFF))
+                self.bg_next_tile_id = self.ppuRead(0x2000 | (self.vram_addr & 0x00000FFF))
 
             if 280 <= self.__cycle < 305:
                 if self.__scanline == -1:
@@ -586,7 +586,7 @@ class Ppu2c02:
                 while nOAMEntry < 64 and self.sprite_count < 9:
                     diff = self.__scanline - self.OAM[nOAMEntry].y
 
-                    if 0 <= diff < (16 if self.__control & 0x0020 else 8) and self.sprite_count < 8:
+                    if 0 <= diff < (16 if self.__control & 0x00000020 else 8) and self.sprite_count < 8:
                         if self.sprite_count < 8:
                             if nOAMEntry == 0:
                                 self.bSpriteZEroHitPossible = True

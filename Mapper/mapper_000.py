@@ -13,14 +13,14 @@ class Mapper_000(Mapper):
     def cpuMapRead(self, addr: int) -> (bool, int, int):
         data = 0x00
         if 0x8000 <= addr < 0xFFFF:
-            mapped_addr = addr & (0x7FFF if self._nPRGBanks > 1 else 0x3FFF)
+            mapped_addr = addr & (0x00007FFF if self._nPRGBanks > 1 else 0x00003FFF)
             return True, mapped_addr, data
         else:
             return False, addr, data
 
     def cpuMapWrite(self, addr: int, data: int) -> (bool, int):
         if 0x8000 <= addr < 0xFFFF:
-            mapped_addr = addr & (0x7FFF if self._nPRGBanks > 1 else 0x3FFF)
+            mapped_addr = addr & (0x00007FFF if self._nPRGBanks > 1 else 0x00003FFF)
             return True, mapped_addr
         else:
             return False, addr

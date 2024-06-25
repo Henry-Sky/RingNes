@@ -120,6 +120,17 @@ class Cpu6502(object):
     def clock(self):
         """Performs Clock Request"""
         if self.__cycles == 0:
+            self.pc &= 0x0000FFFF
+            self.a &= 0x000000FF
+            self.x &= 0x000000FF
+            self.y &= 0x000000FF
+            self.stkp &= 0x000000FF
+            self.status &= 0x000000FF
+            self.__fetched &= 0x000000FF
+            self.__temp &= 0x0000FFFF
+            self.__addr_abs &= 0x0000FFFF
+            self.__addr_rel &= 0x0000FFFF
+
             self.__opcode = self.__read(self.pc)
             self.__SetFlag(FLAGS.U, True)
             self.pc += 1
@@ -465,7 +476,7 @@ class Cpu6502(object):
         """
         self.__addr_abs = self.__read(self.pc)
         self.pc += 1
-        self.__addr_abs &= 0x00FF
+        self.__addr_abs &= 0x000000FF
         return 0
 
     def __ZPX(self) -> int:
@@ -476,7 +487,7 @@ class Cpu6502(object):
         """
         self.__addr_abs = (self.__read(self.pc) + self.x)
         self.pc += 1
-        self.__addr_abs &= 0x00FF
+        self.__addr_abs &= 0x000000FF
         return 0
 
     def __ZPY(self) -> int:
@@ -487,7 +498,7 @@ class Cpu6502(object):
         """
         self.__addr_abs = (self.__read(self.pc) + self.y)
         self.pc += 1
-        self.__addr_abs &= 0x00FF
+        self.__addr_abs &= 0x000000FF
         return 0
 
     def __REL(self) -> int:
@@ -498,8 +509,8 @@ class Cpu6502(object):
         """
         self.__addr_rel = self.__read(self.pc)
         self.pc += 1
-        if self.__addr_rel & 0x80:
-            self.__addr_rel |= 0xFF00
+        if self.__addr_rel & 0x00000080:
+            self.__addr_rel |= 0x0000FF00
         return 0
 
     def __ABS(self) -> int:
@@ -512,7 +523,7 @@ class Cpu6502(object):
         self.pc += 1
         hi = self.__read(self.pc)
         self.pc += 1
-        self.__addr_abs = (hi << 8) | lo
+        self.__addr_abs = ((hi << 8) | lo) & 0x0000FFFF
         return 0
 
     def __ABX(self) -> int:
@@ -528,7 +539,7 @@ class Cpu6502(object):
         self.__addr_abs = (hi << 8) | lo
         self.__addr_abs += self.x
 
-        if (self.__addr_abs & 0xFF00) != (hi << 8):
+        if (self.__addr_abs & 0x0000FF00) != (hi << 8):
             return 1
         else:
             return 0
@@ -546,7 +557,7 @@ class Cpu6502(object):
         self.__addr_abs = (hi << 8) | lo
         self.__addr_abs += self.y
 
-        if (self.__addr_abs & 0xFF00) != (hi << 8):
+        if (self.__addr_abs & 0x0000FF00) != ((hi << 8) & 0x0000FFFF):
             return 1
         else:
             return 0
@@ -564,12 +575,12 @@ class Cpu6502(object):
         self.pc += 1
         ptr_hi = self.__read(self.pc)
         self.pc += 1
-        ptr = (ptr_hi << 8) | ptr_lo
+        ptr = ((ptr_hi << 8) | ptr_lo) & 0x0000FFFF
         # The page problem
         if ptr_lo == 0xFF:
-            self.__addr_abs = (self.__read(ptr & 0xFF00) << 8) | self.__read(ptr + 0)
+            self.__addr_abs = ((self.__read(ptr & 0x0000FF00) << 8) & 0x0000FFFF) | self.__read(ptr + 0)
         else:
-            self.__addr_abs = (self.__read(ptr + 1) << 8) | self.__read(ptr + 0)
+            self.__addr_abs = ((self.__read(ptr + 1) << 8) & 0x0000FFFF) | self.__read(ptr + 0)
         return 0
 
     def __IZX(self) -> int:
@@ -580,9 +591,9 @@ class Cpu6502(object):
         """
         tmp = self.__read(self.pc)
         self.pc += 1
-        lo = self.__read((tmp + self.x) & 0x00FF)
-        hi = self.__read((tmp + self.x + 1) & 0x00FF)
-        self.__addr_abs = (hi << 8) | lo
+        lo = self.__read((tmp + self.x) & 0x000000FF)
+        hi = self.__read((tmp + self.x + 1) & 0x000000FF)
+        self.__addr_abs = ((hi << 8) | lo) & 0x0000FFFF
         return 0
 
     def __IZY(self) -> int:
@@ -593,12 +604,12 @@ class Cpu6502(object):
         """
         tmp = self.__read(self.pc)
         self.pc += 1
-        lo = self.__read(tmp & 0x00FF)
-        hi = self.__read((tmp + 1) & 0x00FF)
-        self.__addr_abs = (hi << 8) | lo
+        lo = self.__read(tmp & 0x000000FF)
+        hi = self.__read((tmp + 1) & 0x000000FF)
+        self.__addr_abs = ((hi << 8) | lo) & 0x0000FFFF
         self.__addr_abs += self.y
 
-        if (self.__addr_abs & 0xFF00) != (hi << 8):
+        if (self.__addr_abs & 0x0000FF00) != ((hi << 8) & 0x0000FFFF):
             return 1
         else:
             return 0
@@ -619,9 +630,9 @@ class Cpu6502(object):
         self.__fetch()
         self.__temp = self.a + self.__fetched + self.__GetFlag(FLAGS.C)
         self.__SetFlag(FLAGS.C, self.__temp > 255)
-        self.__SetFlag(FLAGS.Z, (self.__temp & 0x00ff) == 0)
-        self.__SetFlag(FLAGS.V, ((~self.a ^ self.__fetched) & (self.a ^ self.__temp) & 0x0080) > 0)
-        self.__SetFlag(FLAGS.N, (self.__temp & 0x0080) > 0)
+        self.__SetFlag(FLAGS.Z, (self.__temp & 0x000000ff) == 0)
+        self.__SetFlag(FLAGS.V, ((~self.a ^ self.__fetched) & (self.a ^ self.__temp) & 0x00000080) > 0)
+        self.__SetFlag(FLAGS.N, (self.__temp & 0x00000080) > 0)
         self.a = self.__temp & 0x00ff
         return 1
 
@@ -634,7 +645,7 @@ class Cpu6502(object):
         self.__fetch()
         self.a = self.a & self.__fetched
         self.__SetFlag(FLAGS.Z, self.a == 0x00)
-        self.__SetFlag(FLAGS.N, self.a & 0x80 > 0)
+        self.__SetFlag(FLAGS.N, self.a & 0x00000080 > 0)
         return 1
 
     def __SBC(self) -> int:
@@ -645,11 +656,11 @@ class Cpu6502(object):
         self.__fetch()
         value = self.__fetched ^ 0x00FF
         self.__temp = self.a + value + self.__GetFlag(FLAGS.C)
-        self.__SetFlag(FLAGS.C, self.__temp & 0xFF00 > 0)
-        self.__SetFlag(FLAGS.Z, self.__temp & 0x00FF == 0)
-        self.__SetFlag(FLAGS.V, (self.__temp ^ self.a) & (self.__temp ^ value) & 0x0080 > 0)
-        self.__SetFlag(FLAGS.N, (self.__temp & 0x0080) > 0)
-        self.a = self.__temp & 0x00FF
+        self.__SetFlag(FLAGS.C, self.__temp & 0x0000FF00 > 0)
+        self.__SetFlag(FLAGS.Z, self.__temp & 0x000000FF == 0)
+        self.__SetFlag(FLAGS.V, (self.__temp ^ self.a) & (self.__temp ^ value) & 0x00000080 > 0)
+        self.__SetFlag(FLAGS.N, (self.__temp & 0x00000080) > 0)
+        self.a = self.__temp & 0x000000FF
         return 1
 
     def __ASL(self) -> int:
@@ -662,14 +673,14 @@ class Cpu6502(object):
         :return: 0 cycle
         """
         self.__fetch()
-        self.__temp = self.__fetched << 1
+        self.__temp = (self.__fetched << 1) & 0x000000FF
         self.__SetFlag(FLAGS.C, self.__temp & 0xFF00 > 0)
         self.__SetFlag(FLAGS.Z, self.__temp & 0x00FF == 0)
         self.__SetFlag(FLAGS.N, (self.__temp & 0x0080) > 0)
         if self.__lookup[self.__opcode].addrmode == self.__IMP:
-            self.a = self.__temp & 0x00FF
+            self.a = self.__temp & 0x000000FF
         else:
-            self.__write(self.__addr_abs, self.__temp & 0x00FF)
+            self.__write(self.__addr_abs, self.__temp & 0x000000FF)
         return 0
 
     def __BCC(self) -> int:
@@ -682,7 +693,7 @@ class Cpu6502(object):
             self.__cycles += 1
             self.__addr_abs = self.pc + self.__addr_rel
 
-            if (self.__addr_abs & 0xFF00) != (self.pc & 0xFF00):
+            if (self.__addr_abs & 0x0000FF00) != (self.pc & 0x0000FF00):
                 self.__cycles += 1
             self.pc = self.__addr_abs
         return 0
@@ -696,7 +707,7 @@ class Cpu6502(object):
         if self.__GetFlag(FLAGS.C) == 1:
             self.__cycles += 1
             self.__addr_abs = self.pc + self.__addr_rel
-            if self.__addr_abs & 0xFF00 != (self.pc & 0xFF00):
+            if self.__addr_abs & 0x0000FF00 != (self.pc & 0x0000FF00):
                 self.__cycles += 1
             self.pc = self.__addr_abs
         return 0
@@ -710,7 +721,7 @@ class Cpu6502(object):
         if self.__GetFlag(FLAGS.Z) == 1:
             self.__cycles += 1
             self.__addr_abs = self.pc + self.__addr_rel
-            if (self.__addr_abs & 0xFF00) != (self.pc & 0xFF00):
+            if (self.__addr_abs & 0x0000FF00) != (self.pc & 0x0000FF00):
                 self.__cycles += 1
             self.pc = self.__addr_abs
         return 0
@@ -725,7 +736,7 @@ class Cpu6502(object):
         """
         self.__fetch()
         self.__temp = self.a & self.__fetched
-        self.__SetFlag(FLAGS.Z, self.__temp & 0x00FF == 0)
+        self.__SetFlag(FLAGS.Z, self.__temp & 0x000000FF == 0)
         self.__SetFlag(FLAGS.N, self.__fetched & (1 << 7) > 0)
         self.__SetFlag(FLAGS.V, self.__fetched & (1 << 6) > 0)
         return 0
@@ -739,7 +750,7 @@ class Cpu6502(object):
         if self.__GetFlag(FLAGS.N) == 1:
             self.__cycles += 1
             self.__addr_abs = self.pc + self.__addr_rel
-            if (self.__addr_abs & 0xFF00) != (self.pc & 0xFF00):
+            if (self.__addr_abs & 0x0000FF00) != (self.pc & 0x0000FF00):
                 self.__cycles += 1
             self.pc = self.__addr_abs
         return 0
@@ -753,7 +764,7 @@ class Cpu6502(object):
         if self.__GetFlag(FLAGS.Z) == 0:
             self.__cycles += 1
             self.__addr_abs = self.pc + self.__addr_rel
-            if (self.__addr_abs & 0xFF00) != (self.pc & 0xFF00):
+            if (self.__addr_abs & 0x0000FF00) != (self.pc & 0x0000FF00):
                 self.__cycles += 1
             self.pc = self.__addr_abs
         return 0
@@ -766,8 +777,8 @@ class Cpu6502(object):
         """
         if self.__GetFlag(FLAGS.N) == 0:
             self.__cycles += 1
-            self.__addr_abs = (self.pc + self.__addr_rel) & 0xFFFF
-            if (self.__addr_abs & 0xFF00) != (self.pc & 0xFF00):
+            self.__addr_abs = (self.pc + self.__addr_rel) & 0x0000FFFF
+            if (self.__addr_abs & 0x0000FF00) != (self.pc & 0x0000FF00):
                 self.__cycles += 1
             self.pc = self.__addr_abs
         return 0
@@ -782,15 +793,15 @@ class Cpu6502(object):
         """
         self.pc += 1
         self.__SetFlag(FLAGS.I, True)  # Set the Interrupt flag
-        self.__write(0x0100 + self.stkp, (self.pc >> 8) & 0x00FF)
+        self.__write(0x0100 + self.stkp, (self.pc >> 8) & 0x000000FF)
         self.stkp -= 1
-        self.__write(0x0100 + self.stkp, self.pc & 0x00FF)
+        self.__write(0x0100 + self.stkp, self.pc & 0x000000FF)
         self.stkp -= 1
         self.__SetFlag(FLAGS.B, True)
         self.__write(0x0100 + self.stkp, self.status)
         self.stkp -= 1
         self.__SetFlag(FLAGS.B, False)
-        self.pc = self.__read(0xFFFE) | (self.__read(0xFFFF) << 8)
+        self.pc = self.__read(0x0000FFFE) | ((self.__read(0x0000FFFF) << 8) & 0x0000FFFF)
         return 0
 
     def __BVC(self) -> int:
@@ -802,7 +813,7 @@ class Cpu6502(object):
         if self.__GetFlag(FLAGS.V) == 0:
             self.__cycles += 1
             self.__addr_abs = self.pc + self.__addr_rel
-            if (self.__addr_abs & 0xFF00) != (self.pc & 0xFF00):
+            if (self.__addr_abs & 0x0000FF00) != (self.pc & 0x0000FF00):
                 self.__cycles += 1
             self.pc = self.__addr_abs
         return 0
@@ -816,7 +827,7 @@ class Cpu6502(object):
         if self.__GetFlag(FLAGS.V) == 1:
             self.__cycles += 1
             self.__addr_abs = self.pc + self.__addr_rel
-            if (self.__addr_abs & 0xFF00) != (self.pc & 0xFF00):
+            if (self.__addr_abs & 0x0000FF00) != (self.pc & 0x0000FF00):
                 self.__cycles += 1
             self.pc = self.__addr_abs
         return 0
@@ -867,8 +878,8 @@ class Cpu6502(object):
         self.__fetch()
         self.__temp = self.a - self.__fetched
         self.__SetFlag(FLAGS.C, self.a >= self.__fetched)
-        self.__SetFlag(FLAGS.Z, (self.__temp & 0x00FF) == 0)
-        self.__SetFlag(FLAGS.N, self.__temp & 0x0080 > 0)
+        self.__SetFlag(FLAGS.Z, (self.__temp & 0x000000FF) == 0)
+        self.__SetFlag(FLAGS.N, self.__temp & 0x00000080 > 0)
         return 1
 
     def __CPX(self) -> int:
@@ -881,8 +892,8 @@ class Cpu6502(object):
         self.__fetch()
         self.__temp = self.x - self.__fetched
         self.__SetFlag(FLAGS.C, self.x >= self.__fetched)
-        self.__SetFlag(FLAGS.Z, (self.__temp & 0x00FF) == 0)
-        self.__SetFlag(FLAGS.N, self.__temp & 0x0080 > 0)
+        self.__SetFlag(FLAGS.Z, (self.__temp & 0x000000FF) == 0)
+        self.__SetFlag(FLAGS.N, self.__temp & 0x00000080 > 0)
         return 0
 
     def __CPY(self) -> int:
@@ -895,8 +906,8 @@ class Cpu6502(object):
         self.__fetch()
         self.__temp = self.y - self.__fetched
         self.__SetFlag(FLAGS.C, self.y >= self.__fetched)
-        self.__SetFlag(FLAGS.Z, (self.__temp & 0x00FF) == 0)
-        self.__SetFlag(FLAGS.N, self.__temp & 0x0080 > 0)
+        self.__SetFlag(FLAGS.Z, (self.__temp & 0x000000FF) == 0)
+        self.__SetFlag(FLAGS.N, self.__temp & 0x00000080 > 0)
         return 0
 
     def __DEC(self) -> int:
@@ -930,6 +941,7 @@ class Cpu6502(object):
         :return: 0 cycle
         """
         self.y -= 1
+
         self.__SetFlag(FLAGS.Z, self.y == 0x00)
         self.__SetFlag(FLAGS.N, self.y & 0x80 > 0)
         return 0
@@ -1137,7 +1149,7 @@ class Cpu6502(object):
         :return: 0 cycle
         """
         self.__fetch()
-        self.__temp = (self.__fetched << 1) | self.__GetFlag(FLAGS.C)
+        self.__temp = (self.__fetched << 1) & 0x0000FFFF | self.__GetFlag(FLAGS.C)
         self.__SetFlag(FLAGS.C, self.__temp & 0xFF00 > 0)
         self.__SetFlag(FLAGS.Z, self.__temp & 0X00FF == 0)
         self.__SetFlag(FLAGS.N, self.__temp & 0X0080 > 0)
@@ -1155,14 +1167,14 @@ class Cpu6502(object):
         :return: 0 cycle
         """
         self.__fetch()
-        self.__temp = (self.__GetFlag(FLAGS.C) << 7) | (self.__fetched >> 1)
+        self.__temp = ((self.__GetFlag(FLAGS.C) << 7) & 0x0000FFFF) | (self.__fetched >> 1)
         self.__SetFlag(FLAGS.C, self.__fetched & 0x01 > 0)
         self.__SetFlag(FLAGS.Z, self.__temp & 0x00FF == 0)
         self.__SetFlag(FLAGS.N, self.__temp & 0X0080 > 0)
         if self.__lookup[self.__opcode].addrmode == self.__IMP:
-            self.a = self.__temp & 0X00FF
+            self.a = self.__temp & 0X000000FF
         else:
-            self.__write(self.__addr_abs, self.__temp & 0x00FF)
+            self.__write(self.__addr_abs, self.__temp & 0x000000FF)
         return 0
 
     def __RTI(self) -> int:
@@ -1179,7 +1191,7 @@ class Cpu6502(object):
         self.stkp += 1
         self.pc = self.__read(0x0100 + self.stkp)
         self.stkp += 1
-        self.pc |= self.__read(0x0100 + self.stkp) << 8
+        self.pc |= (self.__read(0x0100 + self.stkp) << 8) & 0x0000FFFF
         return 0
 
     def __RTS(self) -> int:
@@ -1192,7 +1204,7 @@ class Cpu6502(object):
         self.stkp += 1
         self.pc = self.__read(0x0100 + self.stkp)
         self.stkp += 1
-        self.pc |= self.__read(0x0100 + self.stkp) << 8
+        self.pc |= (self.__read(0x0100 + self.stkp) << 8) & 0x0000FFFF
         self.pc += 1
         return 0
 

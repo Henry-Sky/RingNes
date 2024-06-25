@@ -13,7 +13,7 @@ from sprite import Sprite
 
 
 class Display:
-    def __init__(self, root, width=256, height=240, pixel_size=1):
+    def __init__(self, root, width=256, height=240, pixel_size=1, threads = 32):
         root.title('NES-DEV')
         self.root = root
         self.width = width
@@ -34,17 +34,28 @@ class Display:
 
         # Start the thread to generate random pixels
         self.running = True
-        self.thread = threading.Thread(target=self.generate_pixels)
-        self.thread.start()
+
+        self.thread_list = []
+        for i in range(threads):
+            self.thread = threading.Thread(target=self.update_clock)
+            self.thread_list.append(self.thread)
+            self.thread.start()
+        self.pix_thread = threading.Thread(target=self.generate_pixels)
+        self.pix_thread.start()
+
 
         # Start updating the canvas
         self.update_canvas()
+
+    def update_clock(self):
+        while self.running:
+            if self.bus is not None:
+                self.bus.clock()
 
     def generate_pixels(self):
         while self.running:
             new_pixel_data = []
             if self.bus is not None:
-                self.bus.clock()
                 sprScreen : Sprite = self.bus.ppu.GetScreen()
                 data = sprScreen.ColData
                 for y in range(self.height):
@@ -76,7 +87,9 @@ class Display:
 
     def stop(self):
         self.running = False
-        self.thread.join()
+        self.pix_thread.join()
+        for t in self.thread_list:
+            t.join()
 
     def connectBus(self, bus: Bus):
         self.bus = bus
